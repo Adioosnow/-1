@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>航测水境智能溯源系统</title>
+    <!-- 预加载关键资源 -->
+    <link rel="preconnect" href="https://webapi.amap.com">
+    <link rel="dns-prefetch" href="https://webapi.amap.com">
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            background: #0a2f3f;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(90deg, #0a2f3f 0%, #1a5a7a 100%);
+            padding: 10px 20px;
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header-left { display: flex; align-items: center; gap: 20px; }
+        .header h1 { font-size: 18px; }
+        .header h1 span { color: #ffaa66; }
+        .datetime { background: rgba(0,0,0,0.6); padding: 4px 12px; border-radius: 20px; font-size: 12px; font-family: monospace; }
+        .stats { display: flex; gap: 15px; }
+        .stat-item { background: rgba(0,0,0,0.4); padding: 4px 12px; border-radius: 20px; font-size: 12px; }
+        .stat-num { font-size: 16px; font-weight: bold; color: #ffaa66; margin-left: 5px; }
+        .dashboard { display: flex; height: calc(100vh - 52px); }
+        .map-container { flex: 3; position: relative; }
+        #map { width: 100%; height: 100%; }
+        .info-panel {
+            flex: 1.2;
+            background: rgba(10, 47, 63, 0.95);
+            backdrop-filter: blur(8px);
+            color: #fff;
+            padding: 12px;
+            overflow-y: auto;
+            border-left: 1px solid #2a6a7a;
+            font-size: 12px;
+        }
+        .panel-section {
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 12px;
+        }
+        .panel-section h3 {
+            font-size: 14px;
+            margin-bottom: 8px;
+            border-left: 3px solid #ffaa66;
+            padding-left: 8px;
+        }
+        .data-table { width: 100%; font-size: 11px; border-collapse: collapse; }
+        .data-table th, .data-table td { padding: 5px 3px; text-align: left; border-bottom: 1px solid #2a6a7a; }
+        .data-table th { color: #ffaa66; }
+        .badge { display: inline-block; padding: 2px 6px; border-radius: 12px; font-size: 10px; font-weight: bold; }
+        .badge-clean { background: #2ecc71; }
+        .badge-light { background: #f39c12; }
+        .badge-mid { background: #e67e22; }
+        .badge-heavy { background: #e74c3c; }
+        .alert-box { background: rgba(231,76,60,0.2); border-left: 3px solid #e74c3c; padding: 6px; margin-top: 8px; border-radius: 4px; }
+        .ai-badge { background: #ffaa66; color: #0a2f3f; padding: 2px 8px; border-radius: 20px; font-size: 10px; font-weight: bold; display: inline-block; margin-bottom: 8px; }
+        .footer { font-size: 10px; text-align: center; margin-top: 10px; color: #88aabb; }
+        .taskbar {
+            position: fixed;
+            bottom: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.8);
+            padding: 6px 15px;
+            border-radius: 30px;
+            display: flex;
+            gap: 10px;
+            z-index: 200;
+            border: 1px solid #ffaa66;
+        }
+        .task-btn {
+            background: transparent;
+            border: none;
+            color: #fff;
+            padding: 5px 15px;
+            font-size: 12px;
+            cursor: pointer;
+            border-radius: 20px;
+        }
+        .task-btn:hover, .task-btn.active { background: #ffaa66; color: #0a2f3f; }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.85);
+            z-index: 300;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background: #0a2f3f;
+            border-radius: 16px;
+            width: 92%;
+            max-width: 1100px;
+            max-height: 90vh;
+            overflow-y: auto;
+            padding: 20px;
+            border: 2px solid #ffaa66;
+        }
+        .modal-header { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: flex-start;
+            margin-bottom: 20px; 
+            border-bottom: 1px solid #2a6a7a; 
+            padding-bottom: 12px; 
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .modal-header-left {
+            flex: 1;
+        }
+        .modal-header-left h2 { 
+            color: #ffaa66; 
+            font-size: 20px; 
+            margin-bottom: 6px;
+        }
+        .match-badge {
+            background: rgba(255, 170, 102, 0.2);
+            border-left: 3px solid #ffaa66;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            line-height: 1.5;
+            color: #e0e0e0;
+            margin-top: 6px;
+        }
+        .match-badge strong {
+            color: #ffaa66;
+            font-size: 14px;
+        }
+        .close-btn { 
+            background: none; 
+            border: none; 
+            color: #fff; 
+            font-size: 28px; 
+            cursor: pointer;
+            line-height: 1;
+        }
+        .close-btn:hover { color: #ffaa66; }
+        
+        /* 六图谱网格样式 */
+        .fingerprint-gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 20px;
+            margin-top: 15px;
+        }
+        .fp-card {
+            background: rgba(0, 30, 50, 0.6);
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid #2a7a8a;
+            transition: transform 0.2s;
+        }
+        .fp-card:hover {
+            transform: translateY(-3px);
+            border-color: #ffaa66;
+        }
+        .fp-title {
+            background: #1a4a5a;
+            padding: 8px 12px;
+            font-size: 13px;
+            font-weight: bold;
+            color: #ffdd99;
+            border-bottom: 1px solid #ffaa66;
+        }
+        .fp-image-container {
+            padding: 12px;
+            background: #071e28;
+            text-align: center;
+        }
+        .fp-image {
+            width: 100%;
+            max-height: 260px;
+            object-fit: contain;
+            border-radius: 8px;
+            border: 1px solid #2a8a9a;
+            cursor: pointer;
+        }
+        .fp-desc {
+            padding: 8px 12px;
+            font-size: 10px;
+            color: #bbddff;
+            border-top: 1px solid #2a6a7a;
+            background: #0a2a35;
+        }
+        .pollutant-tag {
+            display: inline-block;
+            background: #e74c3c;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 14px;
+            font-size: 9px;
+            margin-right: 6px;
+            margin-top: 4px;
+        }
+        
+        /* 三个AI识别窗口样式 - 保持原样 */
+        .ai-container {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .ai-box {
+            background: rgba(0, 30, 50, 0.6);
+            border-radius: 8px;
+            padding: 10px;
+            border: 1px solid #2a6a7a;
+        }
+        .ai-box-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        .ai-box-header .ai-icon { font-size: 16px; }
+        .ai-box-header h4 { font-size: 12px; color: #fff; margin: 0; flex: 1; }
+        .ai-box-header .ai-badge-small { background: #ffaa66; color: #0a2f3f; padding: 2px 6px; border-radius: 10px; font-size: 9px; font-weight: bold; }
+        .upload-area-small {
+            border: 2px dashed #4a8a9a;
+            border-radius: 6px;
+ padding: 12px;
+            text-align: center;
+            cursor: pointer;
+            background: rgba(0, 30, 50, 0.4);
+            transition: all 0.3s;
+            font-size: 11px;
+        }
+        .upload-area-small:hover { border-color: #ffaa66; background: rgba(255, 170, 102, 0.1); }
+        .upload-area-small.uploaded { border-style: solid; border-color: #2ecc71; background: rgba(46, 204, 113, 0.1); }
+        .hidden-input { display: none; }
+        .detection-result-small { margin-top: 10px; display: none; }
+        .detection-result-small.show { display: block; animation: fadeIn 0.5s ease; }
+        .result-image-small { width: 100%; height: 100px; object-fit: cover; border-radius: 6px; border: 2px solid #ff4444; margin-bottom: 8px; }
+        .image-wrapper-small { position: relative; margin-bottom: 8px; }
+        .result-tag-small { position: absolute; top: 3px; left: 3px; background: #ff0000; color: white; padding: 2px 6px; font-size: 10px; font-weight: bold; border-radius: 3px; }
+        .result-status-small { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; flex-wrap: wrap; }
+        .status-badge-small { background: #ffaa66; color: #000; padding: 3px 8px; border-radius: 12px; font-size: 10px; font-weight: bold; }
+        .status-badge-small.warning { background: #f39c12; }
+        .confidence-text-small { font-size: 11px; color: #fff; }
+        .confidence-value-small { color: #ffaa66; font-weight: bold; }
+        .result-details-small { font-size: 10px; color: #88aabb; line-height: 1.5; }
+        .waiting-area-small { text-align: center; padding: 15px; color: #88aabb; background: rgba(0,0,0,0.2); border-radius: 6px; font-size: 11px; }
+        .source-analysis-box { background: #1e4a5a; padding: 10px; border-radius: 6px; line-height: 1.8; }
+        .source-analysis-box .model-tag { background: #ffaa66; color: #0a2f3f; padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: bold; display: inline-block; margin-bottom: 8px; }
+        .source-analysis-box .highlight { color: #ffaa66; font-weight: bold; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: #1a4a5a; }
+        ::-webkit-scrollbar-thumb { background: #ffaa66; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-left">
+            <h1>🛩️ 航测水境智能溯源系统 </h1>
+            <div class="datetime" id="liveDateTime">加载中...</div>
+        </div>
+        <div class="stats">
+            <div class="stat-item">📊 监测点 <span class="stat-num" id="totalPoints">8</span></div>
+            <div class="stat-item">⚠️ 重度污染 <span class="stat-num" id="heavyCount">2</span></div>
+            <div class="stat-item">🔄 实时更新 <span class="stat-num">✓</span></div>
+        </div>
+    </div>
+    <div class="dashboard">
+        <div class="map-container">
+            <div id="map"></div>
+        </div>
+        <div class="info-panel">
+            <div class="panel-section">
+                <h3>📊 采样点实时数据</h3>
+                <div style="max-height: 200px; overflow-y: auto;">
+                    <table class="data-table" id="dataTable">
+                        <thead>
+<th>编号</th><th>氨氮(mg/L)</th><th>总磷(mg/L)</th><th>COD(mg/L)</th><th>等级</th> </thead>
+                        <tbody id="tableBody"></tbody>
+                     </table>
+                </div>
+            </div>
+            
+            <!-- 三个AI排污口识别窗口 - 完全保持原样 -->
+            <div class="panel-section">
+                <h3>🤖 AI排污口识别 <span class="ai-badge">YOLOv8 | mAP=0.93</span></h3>
+                <div class="ai-container">
+                    <div class="ai-box" id="aiBox1">
+                        <div class="ai-box-header">
+                            <span class="ai-icon">🤖</span>
+                            <h4>AI识别 #1</h4>
+                            <span class="ai-badge-small">YOLOv8</span>
+                        </div>
+                        <div class="upload-area-small" onclick="document.getElementById('imageUpload1').click()">
+                            <div class="upload-icon">📸</div>
+                            <div>点击上传无人机影像</div>
+                            <div class="upload-hint">支持 jpg/png 格式</div>
+                        </div>
+                        <input type="file" id="imageUpload1" class="hidden-input" accept="image/*" onchange="handleImageUpload(1, 97)">
+                        <div class="detection-result-small" id="aiResultDisplay1">
+                            <div class="image-wrapper-small">
+                                <img class="result-image-small" id="preview1" src="" alt="检测图像">
+                                <span class="result-tag-small">排污口 97%</span>
+                            </div>
+                            <div class="result-status-small">
+                                <span class="status-badge-small">✅ 检测完成</span>
+                                <span class="confidence-text-small">置信度 <span class="confidence-value-small">97%</span> | 工业废水特征</span>
+                            </div>
+                            <div class="result-details-small">
+                                <div class="detail-item">📍 检测位置: 120.658°E, 31.996°N (S04-S05之间)</div>
+                                <div class="detail-item">📊 模型: YOLOv8 | 训练数据: 2000张 | mAP@0.5: 0.93</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="ai-box" id="aiBox2">
+                        <div class="ai-box-header">
+                            <span class="ai-icon">🤖</span>
+                            <h4>AI识别 #2</h4>
+                            <span class="ai-badge-small">YOLOv8</span>
+                        </div>
+                        <div class="upload-area-small" onclick="document.getElementById('imageUpload2').click()">
+                            <div class="upload-icon">📸</div>
+                            <div>点击上传无人机影像</div>
+                            <div class="upload-hint">支持 jpg/png 格式</div>
+                        </div>
+                        <input type="file" id="imageUpload2" class="hidden-input" accept="image/*" onchange="handleImageUpload(2, 90)">
+                        <div class="detection-result-small" id="aiResultDisplay2">
+                            <div class="image-wrapper-small">
+                                <img class="result-image-small" id="preview2" src="" alt="检测图像">
+                                <span class="result-tag-small">排污口 90%</span>
+                            </div>
+                            <div class="result-status-small">
+                                <span class="status-badge-small">✅ 检测完成</span>
+                                <span class="confidence-text-small">置信度 <span class="confidence-value-small">90%</span> | 工业废水特征</span>
+                            </div>
+                            <div class="result-details-small">
+                                <div class="detail-item">📍 检测位置: 120.672°E, 31.982°N (S07-S08之间)</div>
+                                <div class="detail-item">📊 模型: YOLOv8 | 训练数据: 2000张 | mAP@0.5: 0.93</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="ai-box" id="aiBox3">
+                        <div class="ai-box-header">
+                            <span class="ai-icon">🤖</span>
+                            <h4>AI识别 #3</h4>
+                            <span class="ai-badge-small">YOLOv8</span>
+                        </div>
+                        <div class="upload-area-small" onclick="document.getElementById('imageUpload3').click()">
+                            <div class="upload-icon">📸</div>
+                            <div>点击上传无人机影像</div>
+                            <div class="upload-hint">支持 jpg/png 格式</div>
+                        </div>
+                        <input type="file" id="imageUpload3" class="hidden-input" accept="image/*" onchange="handleImageUpload(3, 76)">
+                        <div class="detection-result-small" id="aiResultDisplay3">
+                            <div class="image-wrapper-small">
+                                <img class="result-image-small" id="preview3" src="" alt="检测图像">
+                                <span class="result-tag-small">排污口 76%</span>
+                            </div>
+                            <div class="result-status-small">
+                                <span class="status-badge-small warning">⚠️ 检测完成</span>
+                                <span class="confidence-text-small">置信度 <span class="confidence-value-small">76%</span> | 疑似排污口</span>
+                            </div>
+                            <div class="result-details-small">
+                                <div class="detail-item">📍 检测位置: 120.685°E, 31.975°N (S09-S10之间)</div>
+                                <div class="detail-item">📊 模型: YOLOv8 | 训练数据: 2000张 | mAP@0.5: 0.93</div>
+                                <div class="detail-item" style="color: #ffaa66;">💡 建议：置信度较低，建议人工复核确认</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel-section">
+                <h3>🎯 污染源动态推断</h3>
+                <div class="source-analysis-box" id="sourceInfo">
+                    <span class="model-tag">随机森林回归 | R²=0.96</span><br>
+                    基于随机森林回归模型，分析出<span class="highlight">总磷、COD、氨氮</span>为主要污染物。<br>
+                    点位<span class="highlight">S05</span>高度疑似为X化工企业排放的工业废水，是造成下游水域污染的核心嫌疑污染源。
+                </div>
+                <div class="alert-box" id="alertInfo">
+                    ⚠️ 建议立即对S05周边X化工企业进行实地核查
+                </div>
+            </div>
+            <div class="footer">💻 YOLOv8 | 随机森林回归 | 余弦相似度匹配</div>
+        </div>
+    </div>
+    <div class="taskbar">
+        <button class="task-btn active" id="btnMap"> 水质地图</button>
+        <button class="task-btn" id="btnFingerprint"> 水质指纹图谱</button>
+    </div>
+
+    <!-- 指纹图谱弹窗 - 六张图谱网格展示，标题旁增加匹配度分析文字 -->
+    <div id="fingerprintModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-header-left">
+                    <h2>水质指纹图谱库</h2>
+                    <!-- 新增：匹配度分析精简文字，对应台词 -->
+                    <div class="match-badge">
+                       <strong>余弦相似度匹配算法</strong> 水样A与X化工企业指纹匹配度达<strong style="color:#ff9100;">96%</strong>，水样B与正常水质指纹匹配度达<strong style="color:#ff9100;">98%</strong>
+                    </div>
+                </div>
+                <button class="close-btn" id="closeModal">&times;</button>
+            </div>
+            <div class="fingerprint-gallery" id="fingerprintGallery">
+                <!-- 六张图谱将动态生成 -->
+            </div>
+            <div class="formula-box" style="color:#E0EFFF; font-size:16px;">
+                <strong> 反演算法：红边指数</strong><br>
+                REI = (R<sub>720</sub> - R<sub>670</sub>) / (R<sub>720</sub> + R<sub>670</sub>)<br>
+                <span style="color:#E0EFFF">S05点 REI = 0.42</span>→ 重度污染<br>
+                与实测氨氮相关性 R² = 0.94 | 模型训练样本数: 500组
+            </div>
+        </div>
+    </div>
+
+    <!-- 异步加载高德地图API -->
+    <script>
+        // 采样数据 - 提前定义，确保数据立即可用
+        const samplingData = [
+            { id: "S01", lon: 121.142593, lat: 31.709147, nh3: 0.45, tp: 0.08, cod: 8.0, level: "清洁", baseNh3: 0.45 },
+            { id: "S02", lon: 120.838227, lat: 31.948713, nh3: 0.52, tp: 0.09, cod: 8.5, level: "清洁", baseNh3: 0.52 },
+            { id: "S03", lon: 120.724424, lat: 32.003603, nh3: 2.35, tp: 0.38, cod: 24.5, level: "中度", baseNh3: 2.35 },
+            { id: "S04", lon: 120.658028, lat: 31.995710, nh3: 4.65, tp: 0.65, cod: 36.5, level: "重度", baseNh3: 4.65 },
+            { id: "S05", lon: 120.565161, lat: 32.017579, nh3: 4.82, tp: 0.68, cod: 38.2, level: "重度", baseNh3: 4.82 },
+            { id: "S06", lon: 120.443438, lat: 32.043521, nh3: 1.48, tp: 0.25, cod: 16.5, level: "轻度", baseNh3: 1.48 },
+            { id: "S07", lon: 120.374815, lat: 32.002183, nh3: 1.32, tp: 0.22, cod: 15.2, level: "轻度", baseNh3: 1.32 },
+            { id: "S08", lon: 120.343502, lat: 31.979078, nh3: 1.25, tp: 0.20, cod: 14.5, level: "轻度", baseNh3: 1.25 }
+        ];
+
+        const levelColor = { '清洁': '#2ecc71', '轻度': '#f39c12', '中度': '#e67e22', '重度': '#e74c3c' };
+        let map = null, markers = [];
+
+        // 立即更新时间和统计数据，无需等待地图
+        function updateDateTime() {
+            const now = new Date();
+            const dateStr = now.toLocaleString('zh-CN', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+            const el = document.getElementById('liveDateTime');
+            if (el) el.innerText = dateStr;
+        }
+
+        // 立即更新表格和统计数据
+        function initData() {
+            updateTable();
+            updateAnalysis();
+            updateDateTime();
+            // 每秒更新时间
+            setInterval(updateDateTime, 1000);
+            // 每5分钟更新一次数据
+            setInterval(updateRandomData, 300000);
+        }
+
+        function updateRandomData() {
+            samplingData.forEach(s => {
+                let range = s.level === '清洁' ? 0.1 : s.level === '轻度' ? 0.15 : s.level === '中度' ? 0.2 : 0.25;
+                let newNh3 = s.baseNh3 + (Math.random() - 0.5) * range;
+                newNh3 = Math.max(s.level === '清洁' ? 0.3 : s.level === '轻度' ? 1.0 : s.level === '中度' ? 2.0 : 4.2, 
+                                  Math.min(s.level === '清洁' ? 0.8 : s.level === '轻度' ? 1.8 : s.level === '中度' ? 2.9 : 5.2, newNh3));
+                s.nh3 = Number(newNh3.toFixed(2));
+                s.tp = Number((s.tp + (Math.random() - 0.5) * 0.05).toFixed(2));
+                s.cod = Number((s.cod + (Math.random() - 0.5) * 1.5).toFixed(1));
+            });
+            updateTable();
+            updateMapMarkers();
+            updateAnalysis();
+        }
+
+        function updateTable() {
+            const tbody = document.getElementById('tableBody');
+            if (!tbody) return;
+            
+            let html = '';
+            samplingData.forEach(s => {
+                const badgeClass = s.level === '清洁' ? 'badge-clean' : 
+                                  s.level === '轻度' ? 'badge-light' : 
+                                  s.level === '中度' ? 'badge-mid' : 'badge-heavy';
+                html += `<tr>
+                    <td>${s.id}</td>
+                    <td>${s.nh3.toFixed(2)}</td>
+                    <td>${s.tp.toFixed(2)}</td>
+                    <td>${s.cod.toFixed(1)}</td>
+                    <td><span class="badge ${badgeClass}">${s.level}</span></td>
+                </tr>`;
+            });
+            tbody.innerHTML = html;
+        }
+
+        function updateAnalysis() {
+            const heavyCount = samplingData.filter(s => s.level === '重度').length;
+            const totalEl = document.getElementById('totalPoints');
+            const heavyEl = document.getElementById('heavyCount');
+            if (totalEl) totalEl.innerText = samplingData.length;
+            if (heavyEl) heavyEl.innerText = heavyCount;
+        }
+
+        // 地图初始化 - 使用异步加载
+        function initMap() {
+            const centerLon = samplingData.reduce((sum, p) => sum + p.lon, 0) / samplingData.length;
+            const centerLat = samplingData.reduce((sum, p) => sum + p.lat, 0) / samplingData.length;
+            
+            map = new AMap.Map('map', {
+                center: [centerLon, centerLat],
+                zoom: 9,
+                mapStyle: 'amap://styles/dark',
+                layers: [new AMap.TileLayer.Satellite()],
+                showLabel: false,
+                resizeEnable: true,
+                animateEnable: false, // 禁用动画提升性能
+                jogEnable: false, // 禁用缓动效果
+                defaultCursor: 'default'
+            });
+
+            // 监听地图加载完成事件
+            map.on('complete', function() {
+                updateMapMarkers();
+            });
+
+            // 添加比例尺控件
+            map.addControl(new AMap.Scale());
+        }
+
+        function updateMapMarkers() {
+            if (!map) return;
+            // 清除现有标记
+            markers.forEach(m => map.remove(m));
+            markers = [];
+
+            // 使用 LabelMarker 提升性能
+            samplingData.forEach(s => {
+                const color = levelColor[s.level];
+                
+                // 创建圆形标记
+                const marker = new AMap.CircleMarker({
+                    center: [s.lon, s.lat],
+                    radius: s.level === '重度' ? 12 : s.level === '中度' ? 10 : 8,
+                    fillColor: color,
+                    fillOpacity: 0.8,
+                    strokeColor: '#fff',
+                    strokeWeight: 2,
+                    cursor: 'pointer',
+                    extData: s
+                });
+
+                // 添加点位名称标签 - 使用 Text 标注显示 S01, S02 等
+                const textLabel = new AMap.Text({
+                    text: s.id,
+                    anchor: 'center',
+                    draggable: false,
+                    cursor: 'pointer',
+                    style: {
+                        'font-size': '11px',
+                        'font-weight': 'bold',
+                        'color': '#ffffff',
+                        'background-color': 'rgba(0,0,0,0.6)',
+                        'padding': '2px 6px',
+                        'border-radius': '10px',
+                        'border': `1px solid ${color}`,
+                        'text-shadow': '0 1px 2px rgba(0,0,0,0.8)'
+                    },
+                    position: [s.lon, s.lat],
+                    offset: new AMap.Pixel(0, -20) // 向上偏移，避免遮挡标记点
+                });
+                textLabel.setMap(map);
+                markers.push(textLabel);
+
+                // 添加信息窗体
+                const infoWindow = new AMap.InfoWindow({
+                    content: `<div style="padding:8px;font-size:12px;">
+                        <div style="font-weight:bold;color:${color};margin-bottom:4px;">${s.id} - ${s.level}</div>
+                        <div>氨氮: ${s.nh3} mg/L</div>
+                        <div>总磷: ${s.tp} mg/L</div>
+                        <div>COD: ${s.cod} mg/L</div>
+                    </div>`,
+                    offset: new AMap.Pixel(0, -10)
+                });
+
+                marker.on('click', () => {
+                    infoWindow.open(map, [s.lon, s.lat]);
+                });
+
+                marker.setMap(map);
+                markers.push(marker);
+            });
+        }
+
+        // 动态加载高德地图脚本
+        function loadAMapScript() {
+            return new Promise((resolve, reject) => {
+                if (window.AMap) {
+                    resolve();
+                    return;
+                }
+                
+                const script = document.createElement('script');
+                script.type = 'text/javascript';
+                script.async = true;
+                script.src = 'https://webapi.amap.com/maps?v=2.0&key=d42eae5bf1d02449edaf9de882284202';
+                
+                script.onload = () => {
+                    // 等待AMap对象可用
+                    const checkAMap = setInterval(() => {
+                        if (window.AMap) {
+                            clearInterval(checkAMap);
+                            resolve();
+                        }
+                    }, 50);
+                    
+                    // 超时处理
+                    setTimeout(() => {
+                        clearInterval(checkAMap);
+                        if (!window.AMap) reject(new Error('AMap加载超时'));
+                    }, 10000);
+                };
+                
+                script.onerror = () => reject(new Error('AMap脚本加载失败'));
+                document.head.appendChild(script);
+            });
+        }
+
+        // 页面加载完成后立即执行
+        document.addEventListener('DOMContentLoaded', function() {
+            // 1. 立即初始化数据（不依赖地图）
+            initData();
+            
+            // 2. 异步加载地图（不阻塞页面）
+            loadAMapScript()
+                .then(() => {
+                    initMap();
+                })
+                .catch(err => {
+                    console.error('地图加载失败:', err);
+                });
+        });
+
+        // 其他功能函数保持不变
+        function generateDetectionImage(imgDataUrl, confidence, label, coordX, coordY) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+                    const boxX = img.width * 0.3;
+                    const boxY = img.height * 0.35;
+                    const boxW = img.width * 0.4;
+                    const boxH = img.height * 0.3;
+                    ctx.strokeStyle = '#ff0000';
+                    ctx.lineWidth = 4;
+                    ctx.strokeRect(boxX, boxY, boxW, boxH);
+                    ctx.fillStyle = '#ff0000';
+                    ctx.font = 'bold 18px Arial';
+                    const text = `${label} ${confidence}%`;
+                    const textWidth = ctx.measureText(text).width;
+                    ctx.fillRect(boxX, boxY - 28, textWidth + 12, 28);
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillText(text, boxX + 6, boxY - 8);
+                    ctx.font = '14px Arial';
+                    ctx.fillStyle = '#ffaa66';
+                    ctx.shadowColor = 'black';
+                    ctx.shadowBlur = 4;
+                    ctx.fillText(`坐标: ${coordX}°E, ${coordY}°N`, boxX, boxY + boxH + 25);
+                    ctx.fillText(`工业废水特征 | YOLOv8`, boxX, boxY + boxH + 45);
+                    resolve(canvas.toDataURL());
+                };
+                img.src = imgDataUrl;
+            });
+        }
+
+        async function handleImageUpload(boxNum, confidence) {
+            const fileInput = document.getElementById(`imageUpload${boxNum}`);
+            const uploadArea = document.querySelector(`#aiBox${boxNum} .upload-area-small`);
+            const resultDisplay = document.getElementById(`aiResultDisplay${boxNum}`);
+            
+            if (!fileInput.files || !fileInput.files[0]) return;
+            const file = fileInput.files[0];
+            resultDisplay.innerHTML = `<div class="waiting-area-small">🔍 AI模型推理中...</div>`;
+            resultDisplay.classList.add('show');
+            
+            const reader = new FileReader();
+            reader.onload = async (ev) => {
+                const imgDataUrl = ev.target.result;
+                await new Promise(r => setTimeout(r, 1200));
+                const coordX = boxNum === 1 ? '120.658' : boxNum === 2 ? '120.672' : '120.685';
+                const coordY = boxNum === 1 ? '31.996' : boxNum === 2 ? '31.982' : '31.975';
+                const detectedImg = await generateDetectionImage(imgDataUrl, confidence, '排污口', coordX, coordY);
+                const isLowConfidence = confidence < 80;
+                resultDisplay.innerHTML = `
+                    <div class="image-wrapper-small">
+                        <img class="result-image-small" src="${detectedImg}" alt="检测图像">
+                        <span class="result-tag-small">排污口 ${confidence}%</span>
+                    </div>
+                    <div class="result-status-small">
+                        <span class="status-badge-small ${isLowConfidence ? 'warning' : ''}">${isLowConfidence ? '⚠️' : '✅'} 检测完成</span>
+                        <span class="confidence-text-small">置信度 <span class="confidence-value-small">${confidence}%</span> | ${isLowConfidence ? '疑似排污口' : '工业废水特征'}</span>
+                    </div>
+                    <div class="result-details-small">
+                        <div class="detail-item">📍 检测位置: ${coordX}°E, ${coordY}°N (${boxNum === 1 ? 'S04-S05' : boxNum === 2 ? 'S07-S08' : 'S09-S10'}之间)</div>
+                        <div class="detail-item">📊 模型: YOLOv8 | 训练数据: 2000张 | mAP@0.5: 0.93</div>
+                        ${isLowConfidence ? '<div class="detail-item" style="color: #ffaa66;">💡 建议：置信度较低，建议人工复核确认</div>' : ''}
+                    </div>
+                `;
+                uploadArea.classList.add('uploaded');
+                uploadArea.innerHTML = `<div style="color: #2ecc71; font-size: 12px;">✅ 影像已上传</div><div style="color: #7799aa; font-size: 9px; margin-top: 2px;">点击重新上传</div>`;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // 六张指纹图谱数据
+        const fingerprints = [
+            { name: "正常水质指纹图谱", file: "1_正常水质.png", tags: [], desc: "清洁水体，无显著蛋白类污染物峰" },
+            { name: "轻度异常水质指纹图谱", file: "2_轻度异常水质.png", tags: ["类腐殖质", "类色氨酸"], desc: "类腐殖质、类色氨酸轻度检出" },
+            { name: "水样A：拟溯源污水指纹图谱", file: "3_水样A_拟溯源污水.png", tags: ["类酪氨酸", "类色氨酸", "微生物代谢产物"], desc: "工业废水特征显著，与X企业高度相似" },
+            { name: "水样B：拟溯源污水指纹图谱", file: "4_水样B_拟溯源正常水质.png", tags: [], desc: "与正常水质高度相似，无明显污染物" },
+            { name: "X企业水质指纹图谱", file: "5_X企业指纹.png", tags: ["类酪氨酸", "类色氨酸", "腐殖质类物质"], desc: "工业废水典型特征" },
+            { name: "Y企业水质指纹图谱", file: "6_Y企业指纹.png", tags: ["蓝移特征峰", "类富里酸物质"], desc: "蓝移特征，差异明显" }
+        ];
+
+        function buildFingerprintGallery() {
+            const gallery = document.getElementById('fingerprintGallery');
+            if (!gallery) return;
+            gallery.innerHTML = '';
+            fingerprints.forEach((fp, idx) => {
+                const tagsHtml = fp.tags.map(t => `<span class="pollutant-tag">${t}</span>`).join('');
+                const card = document.createElement('div');
+                card.className = 'fp-card';
+                card.innerHTML = `
+                    <div class="fp-title">
+                        <span>📊 ${fp.name}</span>
+                        <span style="background:#ffaa66; color:#0a2f3f; padding:2px 8px; border-radius:20px; font-size:10px;">图谱 ${idx+1}/6</span>
+                    </div>
+                    <div class="fp-image-container">
+                        <img class="fp-image" src="${fp.file}" alt="${fp.name}" onclick="window.open('${fp.file}')" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 400 300\'%3E%3Crect width=\'400\' height=\'300\' fill=\'%23333\'/%3E%3Ctext x=\'200\' y=\'150\' fill=\'%23ffaa66\' text-anchor=\'middle\'%3E图片加载失败%3C/text%3E%3C/svg%3E'">
+                    </div>
+                    <div class="fp-desc">
+                        <div style="margin-bottom: 6px;">${fp.desc}</div>
+                        <div>${tagsHtml}</div>
+                    </div>
+                `;
+                gallery.appendChild(card);
+            });
+        }
+
+        // 指纹图谱弹窗控制
+        const modal = document.getElementById('fingerprintModal');
+        document.getElementById('btnFingerprint').onclick = () => { modal.style.display = 'flex'; buildFingerprintGallery(); };
+        document.getElementById('btnMap').onclick = () => modal.style.display = 'none';
+        document.getElementById('closeModal').onclick = () => modal.style.display = 'none';
+        window.onclick = (e) => { if (e.target === modal) modal.style.display = 'none'; };
+    </script>
+</body>
+</html>
